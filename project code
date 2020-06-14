@@ -1,0 +1,279 @@
+Creating Complete Infrastructure to Launch Website Using Terraform and AWS
+Rahul kumar
+2 Views
+•
+14 Jun, 2020
+
+
+thumb_up
+0
+
+
+thumb_down
+0
+
+
+favorite
+
+
+Terraform is so much intelligent tool that can be used to access all of the public clouds and private clouds. It’s an Infrastructure As Code(IaC) offering means we can write the code(documenting everything) and after executing that code our whole infrastructure will be created precisely.
+
+In this article, We will discuss how to create a complete infrastructure to launch a website using Terraform and AWS.
+
+Here the first task: 
+
+Task 1 : Have to create/launch Application using Terraform
+
+
+
+1. Create the key and security group which allow the port 80.
+
+2. Launch EC2 instance.
+
+3. In this Ec2 instance use the key and security group which we have created in step 1.
+
+4. Launch one Volume (EBS) and mount that volume into /var/www/html
+
+5. Developer have uploded the code into github repo also the repo has some images.
+
+6. Copy the github repo code into /var/www/html
+
+7. Create S3 bucket, and copy/deploy the images from github repo into the s3 bucket and change the permission to public readable.
+
+8 Create a Cloudfront using s3 bucket(which contains images) and use the Cloudfront URL to update in code in /var/www/html
+
+
+
+Sol:
+
+first we have to configure our profile ;
+// aws provider
+
+
+
+provider "aws" {
+
+ region = "ap-south-1"
+
+ profile = "myvimal"
+
+}
+
+After configuring profile we have to make a key and security group,
+I already have a key and security groups 
+Using this key and security groups we have to create instance;
+// creating aws instance 
+
+
+
+resource "aws_instance" "web" {
+
+ ami      = "ami-0447a12f28fddb066"
+
+ instance_type = "t2.micro"
+
+ key_name = "mykey111222"
+
+ security_groups = [ "launch-wizard-2" ]
+
+
+
+Creating new Volume and attaching this volume to the above EC2 instance:
+// creating ebs volume
+
+resource "aws_ebs_volume" "ebs1" {
+
+ availability_zone = aws_instance.web.availability_zone
+
+ size       = 1
+
+
+
+ tags = {
+
+  Name = "lwebs"
+
+ }
+
+}
+
+// attaching ebs volume 
+
+resource "aws_volume_attachment" "ebs_att" {
+
+ device_name = "/dev/sdh"
+
+ volume_id  = "${aws_ebs_volume.ebs1.id}"
+
+ instance_id = "${aws_instance.web.id}"
+
+}
+
+
+
+for attaching and perform this operation we have to give root permission and downloads httpd 
+
+
+
+
+// for connecting to root
+
+
+
+  connection {
+
+  type   = "ssh"
+
+  user   = "ec2-user"
+
+  private_key = file("C:/Users/RAHUL KUMAR/Downloads/mykey1111.pem")
+
+  host   = aws_instance.web.public_ip
+
+ }
+
+ // provide local executor
+
+
+
+ provisioner "remote-exec" {
+
+  inline = [
+
+   "sudo yum install httpd php git -y",
+
+   "sudo systemctl restart httpd",
+
+   "sudo systemctl enable httpd",
+
+  ]
+
+ }
+
+
+
+After creating the volume we have to mount it and for mount also we use provisioner and give local permission
+
+
+
+
+// providing null resource 
+
+
+
+resource "null_resource" "nullrm" {
+
+
+
+depends_on = [
+
+  aws_volume_attachment.ebs_att,
+
+ ]
+
+
+
+
+
+ connection {
+
+  type   = "ssh"
+
+  user   = "ec2-user"
+
+  private_key = file("C:/Users/RAHUL KUMAR/Downloads/mykey1111.pem")
+
+  host   = aws_instance.web.public_ip
+
+ }
+
+
+
+provisioner "remote-exec" {
+
+  inline = [
+
+   "sudo mkfs.ext4 /dev/xvdh",
+
+   "sudo mount /dev/xvdh /var/www/html",
+
+   "sudo rm -rf /var/www/html/*",
+
+   "sudo git clone https://github.com/rahul1999724/hybridcloud.git /var/www/html/"
+
+  ]
+
+ }
+
+}
+
+and we give some depend on permission to execute commands in a sequence ;
+
+
+resource "null_resource" "nullrm" {
+
+
+
+depends_on = [
+
+  aws_volume_attachment.ebs_att,
+
+ ]
+
+creating a private s3 bucket:
+// Creating private S3 Bucket
+
+resource "aws_s3_bucket" "tera_bucket" {
+
+bucket = "terra-bucket-test"
+
+acl  = "private"
+
+tags = {
+
+Name    = "terra_bucket"
+
+}
+
+}
+
+// Block Public Access
+
+resource "aws_s3_bucket_public_access_block" "s3BlockPublicAccess" {
+
+bucket = "${aws_s3_bucket.tera_bucket.id}"
+
+block_public_acls  = true
+
+block_public_policy = true
+
+restrict_public_buckets = true
+
+}
+
+
+
+So, finally, our code is ready and can be executed to launch the whole infrastructure with a single click.
+
+Executing the above code:
+Run the following commands in order to execute the code.
+
+
+
+$ terraform init
+The terraform init command will download all of the required plugins for our terraform code.
+
+$ terraform apply
+The terraform apply command will execute the terraform code.
+
+
+
+
+After that new instance and volume will launch
+
+
+This integration gives us so much power that we can launch the whole infrastructure by a single click.
+
+Also destroying this infrastructure is pretty easy. Just type the following and command and our whole infrastructure is destroyed permanently.
+
+$ terraform destroy
